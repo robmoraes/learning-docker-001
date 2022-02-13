@@ -1,0 +1,48 @@
+version: '3.1'
+
+services:
+  nginx:
+    image: nginx:latest
+    restart: unless-stopped
+    ports:
+      - 80:80
+      - 443:443
+    command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+    depends_on:
+      - "phpfpm"
+    volumes:
+      - ./nginx/conf/:/etc/nginx/conf.d/:ro
+      - ./apps/api/:/apps/backend
+      - ./apps/frontend:/apps/frontend
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+
+  phpfpm:
+    image: php:8.1.2-fpm-bullseye
+    restart: unless-stopped
+    #command: "wget https://getcomposer.org/download/2.2.6/composer.phar > /composer.phar"
+    volumes:
+      - ./apps/api/:/apps/backend/
+
+  certbot:
+    image: certbot/certbot
+    restart: always
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    secrets:
+      - mysql_root_password
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/mysql_root_password
+    volumes:
+      - ./mysql/data/:/var/lib/mysql
+      - ./mysql/conf/:/etc/mysql/conf.d
+
+secrets:
+  mysql_root_password:
+    external: true
